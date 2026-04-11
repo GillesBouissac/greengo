@@ -1,0 +1,2 @@
+# greengo
+Greengo mascotte assets
