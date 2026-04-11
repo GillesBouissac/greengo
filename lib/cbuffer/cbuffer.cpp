@@ -1,5 +1,7 @@
-#include "Arduino.h"
+#include <stdio.h>
 #include "cbuffer.hpp"
+
+#define min(a,b) ((a)<(b)?(a):(b))
 
 void CircularBufferInit(CircularBuffer* buffer) {
     buffer->idx = 0;

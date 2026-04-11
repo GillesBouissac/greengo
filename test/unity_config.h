@@ -1,3 +1,5 @@
+#ifdef ENV_ARDUINO
+
 #ifndef UNITY_CONFIG_H
 #define UNITY_CONFIG_H
 
@@ -21,3 +23,5 @@ void unityOutputComplete();
 #endif /* extern "C" */
 
 #endif /* UNITY_CONFIG_H */
+
+#endif /* ENV_ARDUINO */

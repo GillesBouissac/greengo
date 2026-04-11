@@ -88,6 +88,12 @@ void test_circular_buffer_average() {
 }
 
 void test_circular_buffer_cleaned_succesfully() {
+    for (uint8_t i = 0; i < HISTORY_DEPTH/2; i++) {
+        CircularBufferAdd(&buff, i);
+    }
+    TEST_ASSERT_FALSE(CircularBufferEmpty(&buff));
+    CircularBufferInit(&buff);
+    TEST_ASSERT_TRUE(CircularBufferEmpty(&buff));
 }
 
 int main( int argc, char **argv) {
@@ -98,7 +104,7 @@ int main( int argc, char **argv) {
     RUN_TEST(test_circular_buffer_reports_full_correctly);
     RUN_TEST(test_circular_buffer_read_element_succesful);
     RUN_TEST(test_circular_buffer_average);
-//    RUN_TEST(test_circular_buffer_cleaned_succesfully);
+    RUN_TEST(test_circular_buffer_cleaned_succesfully);
 
     UNITY_END();
 }

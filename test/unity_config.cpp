@@ -1,3 +1,5 @@
+#ifdef ENV_ARDUINO
+
 #include <stdio.h>
 #include "Arduino.h"
 #include "unity_config.h"
@@ -24,3 +26,5 @@ void setup()
         delay(3000);
     }
 }
+
+#endif /* ENV_ARDUINO */
