@@ -5,55 +5,27 @@
  * then off for one second, repeatedly.
  */
 #include "Arduino.h"
+#include "cbuffer.hpp"
 
 
 // inputs for auto-alimentation (not implemented)
 #define PWM_AUTO        3
 #define BUTTON          7
-typedef unsigned long   ulong;
-typedef unsigned int    uint;
 
 // ----------------------------------------
 // Analog input smoothing
 // ----------------------------------------
-#define HISTORY_DEPTH   10
-#define ANALOG_READ_MAX 1024
-typedef struct {
-  int idx;   // next idx
-  int count; // total count of values read
-  ulong values[HISTORY_DEPTH];
-} PinHistory;
-
-// Resets a PinHistory structure
-void initHistory(PinHistory* history) {
-  history->idx = 0;
-  history->count = 0;
-  for (int i=0; i<HISTORY_DEPTH; i++) {
-    history->values[i] = 0;
-  }
-}
-
 // Read a value and store it in the given history array
 // The returned value is the average of all inputs in the array
-ulong analogReadSmooth(int pin, PinHistory* history) {
-  // Records the new value
-  ulong value = analogRead (pin);
-  history->idx   = (history->idx+1) % HISTORY_DEPTH;
-  history->count = min(history->count+1, HISTORY_DEPTH);
-  history->values[history->idx] = value;
-  // Average
-  int idx = history->idx;
-  ulong sum = 0;
-  for (int i=0; i<history->count; i++) {
-    sum += history->values[idx];
-    idx = (idx-1+HISTORY_DEPTH) % HISTORY_DEPTH;
-  }
-  return sum/history->count;
+ulong analogReadSmooth(int pin, CircularBuffer* history) {
+  // Records the new value and returns the average of the buffer
+  CircularBufferAdd(history, analogRead (pin));
+  return CircularBufferAverage(history);
 }
 
-// Reset and fill the given PinHistory
-ulong resampleAnalogInput(int pin, PinHistory* history) {
-  initHistory (history);
+// Reset and fill the given CircularBuffer
+ulong resampleAnalogInput(int pin, CircularBuffer* history) {
+  CircularBufferInit (history);
   ulong result = 0;
   for (int i=0; i<HISTORY_DEPTH; i++) {
     result = analogReadSmooth (pin,  history);
@@ -71,6 +43,7 @@ ulong resampleAnalogInput(int pin, PinHistory* history) {
 #define PUMP_POWER_MAX    255
 #define PUMP_POWER_MIN    (255*PUMP_VOLT_MIN)/PUMP_VOLT_MAX
 #define PUMP_POWER_RANGE  (PUMP_POWER_MAX-PUMP_POWER_MIN)
+#define ANALOG_READ_MAX   1024
 ulong adj_pump_power = 0;
 uint updatePumpRpm(bool is_on) {
   uint pump_power = 0;
@@ -125,14 +98,14 @@ void printvals(uint a,uint b,uint c) {
 // Initialisation
 // ----------------------------------------
 void resampleAnalogInputs() {
-  PinHistory history;
+  CircularBuffer history;
   adj_led_power  = resampleAnalogInput (ADJ_LED_POWER,  &history);
   adj_led_freq   = resampleAnalogInput (ADJ_LED_FREQ,   &history);
   adj_pump_power = resampleAnalogInput (ADJ_PUMP_POWER, &history);
   printvals(adj_led_power,adj_led_freq,adj_pump_power);
 }
 void setup () {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode (PWM_AUTO, OUTPUT);
   pinMode (PWM_PUMP, OUTPUT);
   pinMode (PWM_LED, OUTPUT);
