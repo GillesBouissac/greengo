@@ -1,132 +1,67 @@
-/**
- * Blink
- *
- * Turns on an LED on for one second,
- * then off for one second, repeatedly.
- */
-#include "Arduino.h"
-#include "cbuffer.hpp"
 
+#include "control_cheeks.hpp"
+#include "control_pump.hpp"
 
-// inputs for auto-alimentation (not implemented)
-#define PWM_AUTO        3
-#define BUTTON          7
-
-// ----------------------------------------
-// Analog input smoothing
-// ----------------------------------------
-// Read a value and store it in the given history array
-// The returned value is the average of all inputs in the array
-ulong analogReadSmooth(int pin, CircularBuffer* history) {
-  // Records the new value and returns the average of the buffer
-  CircularBufferAdd(history, analogRead (pin));
-  return CircularBufferAverage(history);
-}
-
-// Reset and fill the given CircularBuffer
-ulong resampleAnalogInput(int pin, CircularBuffer* history) {
-  CircularBufferInit (history);
-  ulong result = 0;
-  for (int i=0; i<HISTORY_DEPTH; i++) {
-    result = analogReadSmooth (pin,  history);
+/// @brief Helper function to print multiple values to the serial output, separated by commas
+template<typename T, typename... Args>
+void printvals(T first, Args... rest) {
+  Serial.print(first);
+  if constexpr (sizeof...(rest) > 0) {
+    Serial.print(",");
+    printvals(rest...);
+  } else {
+    Serial.println();
   }
-  return result;
 }
 
-// ----------------------------------------
-// Pump RPM control
-// ----------------------------------------
-#define ADJ_PUMP_POWER    A2
-#define PUMP_VOLT_MIN     7
-#define PUMP_VOLT_MAX     12
-#define PWM_PUMP          11
-#define PUMP_POWER_MAX    255
-#define PUMP_POWER_MIN    (255*PUMP_VOLT_MIN)/PUMP_VOLT_MAX
-#define PUMP_POWER_RANGE  (PUMP_POWER_MAX-PUMP_POWER_MIN)
-#define ANALOG_READ_MAX   1024
-ulong adj_pump_power = 0;
-uint updatePumpRpm(bool is_on) {
-  uint pump_power = 0;
-  if (is_on) {
-    pump_power = PUMP_POWER_MIN + (adj_pump_power*PUMP_POWER_RANGE)/ANALOG_READ_MAX;
-  }
-  analogWrite (PWM_PUMP, pump_power);
-  return pump_power;
-}
+/// @brief Pin definitions
+#define ADJ_LED_POWER     A0 // Potentiometer for adjusting the LED power (brightness)
+#define ADJ_LED_FREQ      A1 // Potentiometer for adjusting the LED blinking frequency, the lower the faster the blinking
+#define ADJ_PUMP_POWER    A2 // Potentiometer for adjusting the pump RPM
+#define BUTTON             7 // Button for turning on/off the pump and LED
+#define PWM_LED           10 // PWM output pin for the LED, controls the brightness
+#define PWM_PUMP          11 // PWM output pin for the pump, controls the RPM
 
-// ----------------------------------------
-// LED Blinking control
-// ----------------------------------------
-#define ADJ_LED_POWER     A0
-#define ADJ_LED_FREQ      A1
-#define PWM_LED           10
-#define MS_PER_CYCLE_MIN  400
-#define MS_PER_CYCLE_MAX  5000
-#define LED_POWER_MIN     1
-ulong start_time = 0;
-ulong adj_led_power = 0;
-ulong adj_led_freq = 0;
-uint updateLedBlinking(bool is_on) {
-  uint led_power = 0;
-  if (is_on) {
-    ulong led_max_power = max(min(255,(adj_led_power*255)/ANALOG_READ_MAX),LED_POWER_MIN);
-    ulong ms_per_cycle = MS_PER_CYCLE_MIN + (adj_led_freq*MS_PER_CYCLE_MAX)/ANALOG_READ_MAX;
-    ulong value_in_cycle = (millis()-start_time) % ms_per_cycle;
-    float angle = (2 * PI * value_in_cycle / ms_per_cycle) + PI;
-    led_power = LED_POWER_MIN + (led_max_power-LED_POWER_MIN)*(cos(angle)+1)/2;
-  }
-  else {
-    start_time = millis();
-  }
-  analogWrite (PWM_LED, led_power);
-  return led_power;
-}
-
-// ----------------------------------------
-// Debug
-// ----------------------------------------
-void printvals(uint a,uint b,uint c) {
-  Serial.print(a);
-  Serial.print(",");
-  Serial.print(b);
-  Serial.print(",");
-  Serial.print(c);
-  Serial.println();
-}
-
-// ----------------------------------------
-// Initialisation
-// ----------------------------------------
-void resampleAnalogInputs() {
-  CircularBuffer history;
-  adj_led_power  = resampleAnalogInput (ADJ_LED_POWER,  &history);
-  adj_led_freq   = resampleAnalogInput (ADJ_LED_FREQ,   &history);
-  adj_pump_power = resampleAnalogInput (ADJ_PUMP_POWER, &history);
-  printvals(adj_led_power,adj_led_freq,adj_pump_power);
-}
+/// @brief Initialisation
 void setup () {
-  Serial.begin(115200);
-  pinMode (PWM_AUTO, OUTPUT);
-  pinMode (PWM_PUMP, OUTPUT);
-  pinMode (PWM_LED, OUTPUT);
+  Serial.begin(9600);
   pinMode (BUTTON, INPUT);
   pinMode (ADJ_LED_POWER, INPUT);
   pinMode (ADJ_LED_FREQ, INPUT);
   pinMode (ADJ_PUMP_POWER, INPUT);
-  resampleAnalogInputs();
+  pinMode (PWM_PUMP, OUTPUT);
+  pinMode (PWM_LED, OUTPUT);
 }
 
-// ----------------------------------------
-// Main loop
-// ----------------------------------------
-bool lastButtonState = false;
+/// @brief Engine current state
+static bool lastButtonState = false;
+static ulong cheek_power_control = 0;
+static ulong cheek_blink_control = 0;
+static ulong pump_power_control = 0;
+
+/// @brief Main loop
 void loop () {
+  uint led_power = 0;
+  uint pump_power = 0;
+
   bool is_on = digitalRead(BUTTON)==HIGH;
-  if (is_on && !lastButtonState) {
-    resampleAnalogInputs();
+  if (is_on) {
+    if (!lastButtonState) {
+      cheek_power_control = readCheeksPower (ADJ_LED_POWER);
+      cheek_blink_control = readCheeksBlinkFrequency (ADJ_LED_FREQ);
+      pump_power_control  = readPumpPower (ADJ_PUMP_POWER);
+    }
+    led_power = computeCheeksPower(cheek_power_control, cheek_blink_control);
+    pump_power = computePumpRpm(pump_power_control);
   }
-  uint led = updateLedBlinking(is_on);
-  uint pump = updatePumpRpm(is_on);
+  else {
+    led_power = switchOffCheeks();
+    pump_power = switchOffPump();
+  }
+
+  analogWrite (PWM_PUMP, pump_power);
+  analogWrite (PWM_LED, led_power);
+  printvals((uint)is_on, pump_power_control, cheek_blink_control, cheek_power_control, pump_power, led_power);
+
   lastButtonState = is_on;
-  printvals(led,pump,0);
 }

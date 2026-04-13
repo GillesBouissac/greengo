@@ -1,12 +1,13 @@
+#ifndef cbuffer_hpp
+#define cbuffer_hpp
 
-typedef unsigned long   ulong;
-typedef unsigned int    uint;
+#include "greengo_common.hpp"
 
-#define HISTORY_DEPTH   10
+#define BUFFER_SIZE   10
 typedef struct {
     int idx;   // next idx
     int count; // total count of values read
-    ulong values[HISTORY_DEPTH];
+    ulong values[BUFFER_SIZE];
 } CircularBuffer;
 
 
@@ -34,11 +35,4 @@ ulong CircularBufferAverage(CircularBuffer* buffer);
 /// @return The value at the index, or 0 if index out of range
 ulong CircularBufferGet(CircularBuffer* buffer, int index);
 
-
-ulong analogReadSmooth(int pin, CircularBuffer* history);
-ulong resampleAnalogInput(int pin, CircularBuffer* history);
-uint updatePumpRpm(bool is_on);
-uint updateLedBlinking(bool is_on);
-void printvals(uint a,uint b,uint c);
-void resampleAnalogInputs();
-
+#endif /* cbuffer_hpp */
