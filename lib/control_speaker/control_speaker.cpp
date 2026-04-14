@@ -20,9 +20,26 @@
  * IN THE SOFTWARE.
  */
 #include "control_speaker.hpp"
+#include "SoftwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
 
+DFRobotDFPlayerMini player;
 
-
+void speakersInit(int rxPin, int txPin) {
+    SoftwareSerial FPSerial(rxPin, txPin);
+    FPSerial.begin(9600);
+    while(!player.begin(FPSerial)) {
+        Serial.println("Unable to initialize DFPlayer Mini, check connections and SD card.");
+        delay(1000);
+    }
+    player.volume(20); // Set volume to a reasonable level (0-30)
+    Serial.println("DFPlayer Mini online.");
+    player.disableDAC(); // Disable DAC to save power when not playing audio
+    player.randomAll();
+    Serial.println("Random playback enabled.");
+    Serial.println("Number of tracks in SD card: " + String(player.readFileCounts()));
+    Serial.println("Number of folders in SD card: " + String(player.readFolderCounts()));
+}
 
 
 

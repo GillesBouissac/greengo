@@ -24,5 +24,11 @@
 
 #include "greengo_common.hpp"
 
+/// @brief Initializes communication with the DFPlayer Mini MP3 module and checks if it's online
+/// @param rxPin The pin number for the software serial RX (receiving data from the DFPlayer Mini)
+/// @param txPin The pin number for the software serial TX (sending data to the DFPlayer Mini)
+void speakersInit(int rxPin, int txPin);
+
+
 
 #endif /* control_speaker_hpp */
